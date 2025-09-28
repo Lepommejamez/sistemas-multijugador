@@ -13,19 +13,34 @@ $configuration = array(
     '{REGISTER_URL}'      => '/?page=register',
     '{SITE_NAME}'         => 'La meva pàgina'
 );
+
+
 // =============================
 // 1. Procesar navegación (GET)
 // =============================
-if (isset($_GET['page'])) {
-    if ($_GET['page'] === 'register') {
+if (isset($_GET['page'])) 
+{
+    if ($_GET['page'] === 'register') 
+    {
         $template = 'register';
         $configuration['{REGISTER_USERNAME}'] = '';
         $configuration['{LOGIN_LOGOUT_TEXT}'] = 'Ja tinc un compte';
         $configuration['{METHOD}'] = 'POST'; // formulario de registro usa POST
-    } else if ($_GET['page'] === 'login') {
-        $template = 'login';
-        $configuration['{LOGIN_USERNAME}'] = '';
-        $configuration['{METHOD}'] = 'POST'; // formulario de login usa POST
+    } 
+    else if ($_GET['page'] === 'login') 
+    {
+        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true)
+        {
+            //TODO: Log out option
+            $configuration['{FEEDBACK}'] = '<mark>Ja tens una sessió iniciada com <b>' . htmlentities($_SESSION['username']) . '</b></mark>';
+            $template = 'home';
+        } 
+        else 
+        {
+            $template = 'login';
+            $configuration['{LOGIN_USERNAME}'] = '';
+            $configuration['{METHOD}'] = 'POST';
+        }
     }
 }
     
