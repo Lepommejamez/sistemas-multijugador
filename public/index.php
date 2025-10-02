@@ -2,8 +2,36 @@
 session_start();
 
 
-//session_unset();   // borra todas las variables de sesión
-//session_destroy(); // destruye la sesión en el servidor
+function verify_recaptcha(string $token, string $secret): bool 
+{
+    // Forzar true en desarrollo
+    if (php_sapi_name() === 'cli' || $_SERVER['SERVER_NAME'] === 'localhost') {
+        return true;
+    }
+
+    if (empty($token)) return false;
+    
+    $url = 'https://www.google.com/recaptcha/api/siteverify';
+    $data = http_build_query([
+        'secret' => $secret,
+        'response' => $token,
+        'remoteip' => $_SERVER['REMOTE_ADDR'] ?? ''
+    ]);
+
+    $options = ['http' => [
+        'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+        'method'  => 'POST',
+        'content' => $data,
+        'timeout' => 5
+    ]];
+    $context  = stream_context_create($options);
+    $result   = @file_get_contents($url, false, $context);
+    if (!$result) return false;
+
+    $json = json_decode($result, true);
+    return !empty($json['success']) && $json['success'] === true;
+}
+
 // configuración
 define('MIN_PASSWORD_LENGTH', 12); // cambia a lo que necesites
 
@@ -66,48 +94,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register']))
     $username = $_POST["user_name"];
     $password = $_POST["user_password"];
 
-    if ($username === '' || $password === '') 
-    {
-        $configuration['{FEEDBACK}'] = '<mark>ERROR: Omple tots els camps</mark>';
-    } elseif (strlen($password) < MIN_PASSWORD_LENGTH) 
-    {
-        $configuration['{FEEDBACK}'] = '<mark>ERROR: La contrasenya ha de tenir almenys ' . MIN_PASSWORD_LENGTH . ' caràcters</mark>';
-    } 
-    else 
-    {
-        
-        // Comprobar si existe el usuario
-        $sql = 'SELECT * FROM users WHERE user_name = :username';
-        $query = $db->prepare($sql);
-        $query->bindValue(':username', $username);
-        $query->execute();
-        $result_row = $query->fetchObject();
 
-        if ($result_row) 
+    // Verificar reCAPTCHA
+    $RECAPTCHA_SECRET = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'; // clave de prueba
+    $recap_token = $_POST['g-recaptcha-response'] ?? '';
+    $captchaOk = false;
+
+    if (empty($recap_token)) {
+        $configuration['{FEEDBACK}'] = '<mark>ERROR: CAPTCHA no completat.</mark>';
+    } elseif (!verify_recaptcha($recap_token, $RECAPTCHA_SECRET)) {
+        $configuration['{FEEDBACK}'] = '<mark>ERROR: CAPTCHA no verificat. Torna-ho a intentar.</mark>';
+    } else {
+        $captchaOk = true;
+    }
+    
+    if($captchaOk)
+    {
+        if ($username === '' || $password === '') 
         {
-            $configuration['{FEEDBACK}'] = "<mark>ERROR: L'usuari <b>" . htmlentities($username) . '</b> ja existeix</mark>';
+            $configuration['{FEEDBACK}'] = '<mark>ERROR: Omple tots els camps</mark>';
+        } 
+        elseif (strlen($password) < MIN_PASSWORD_LENGTH) 
+        {
+            $configuration['{FEEDBACK}'] = '<mark>ERROR: La contrasenya ha de tenir almenys ' . MIN_PASSWORD_LENGTH . ' caràcters</mark>';
         } 
         else 
         {
-            
-            // Hash de la contraseña
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $sql = 'INSERT INTO users (user_name, user_password) VALUES (:username, :user_password)';
+            // Comprobar si existe el usuario
+            $sql = 'SELECT * FROM users WHERE user_name = :username';
             $query = $db->prepare($sql);
             $query->bindValue(':username', $username);
-            $query->bindValue(':user_password', $hash);
-            if ($query->execute()) 
+            $query->execute();
+            $result_row = $query->fetchObject();
+
+            if ($result_row) 
             {
-                //Asumiendo que se ejecuta, ya se creo el usuario en la base de datos.
-                $configuration['{FEEDBACK}'] = 'Creat el compte <b>' . htmlentities($_POST['user_name']) . '</b>';
-                $configuration['{LOGIN_LOGOUT_TEXT}'] = 'Tancar sessió';
-            }
+                $configuration['{FEEDBACK}'] = "<mark>ERROR: L'usuari <b>" . htmlentities($username) . '</b> ja existeix</mark>';
+            } 
             else 
             {
-                $configuration['{FEEDBACK}'] = '<mark>ERROR: No s\'ha pogut crear l\'usuari</mark>';
-            } 
+
+                // Hash de la contraseña
+                $hash = password_hash($password, PASSWORD_DEFAULT);
+                $sql = 'INSERT INTO users (user_name, user_password) VALUES (:username, :user_password)';
+                $query = $db->prepare($sql);
+                $query->bindValue(':username', $username);
+                $query->bindValue(':user_password', $hash);
+                if ($query->execute()) 
+                {
+                    //Asumiendo que se ejecuta, ya se creo el usuario en la base de datos.
+                    $configuration['{FEEDBACK}'] = 'Creat el compte <b>' . htmlentities($_POST['user_name']) . '</b>';
+                    $configuration['{LOGIN_LOGOUT_TEXT}'] = 'Tancar sessió';
+                }
+                else 
+                {
+                    $configuration['{FEEDBACK}'] = '<mark>ERROR: No s\'ha pogut crear l\'usuari</mark>';
+                } 
+            }
         }
     }
+    
 }
 
 // =============================
