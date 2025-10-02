@@ -3,6 +3,7 @@
 
 <head>
     <!-- dades tècniques de la pàgina -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <meta charset="utf-8">
     <title>{SITE_NAME} :: Inici de sessió</title>
     <meta name="viewport" content="width=device-width, initial-scale=1"><!-- per a dispositius mòbils -->
@@ -31,6 +32,7 @@
                 <input id="login_username" type="text" name="user_name" value="{LOGIN_USERNAME}" />
                 <label for="login_password">Contrasenya</label>
                 <input id="login_password" type="password" name="user_password" />
+                <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
                 <button type="submit" name="login" value="Iniciar sessió">Iniciar sessió</button>
             </form>
         </section>

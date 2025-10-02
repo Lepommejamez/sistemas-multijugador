@@ -164,38 +164,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = trim($_POST["user_name"] ?? '');
     $password = trim($_POST["user_password"] ?? '');
 
-    if ($username === '' || $password === '') {
-        $configuration['{FEEDBACK}'] = '<mark>ERROR: Omple tots els camps</mark>';
+
+    // Verificar reCAPTCHA
+    $RECAPTCHA_SECRET = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'; // clave de prueba
+    $recap_token = $_POST['g-recaptcha-response'] ?? '';
+    $captchaOk = false;
+
+    if (empty($recap_token)) {
+        $configuration['{FEEDBACK}'] = '<mark>ERROR: CAPTCHA no completat.</mark>';
+    } elseif (!verify_recaptcha($recap_token, $RECAPTCHA_SECRET)) {
+        $configuration['{FEEDBACK}'] = '<mark>ERROR: CAPTCHA no verificat. Torna-ho a intentar.</mark>';
     } else {
-        // Seleccionamos por nombre de usuario y recuperamos el hash
-        $sql = 'SELECT user_id, user_password FROM users WHERE user_name = :user_name LIMIT 1';
-        $query = $db->prepare($sql);
-        $query->bindValue(':user_name', $username);
-        $query->execute();
-        $row = $query->fetch(PDO::FETCH_ASSOC);
+        $captchaOk = true;
+    }
 
-        if ($row && isset($row['user_password']) && password_verify($password, $row['user_password'])) {
-            // Login correcto
-            session_regenerate_id(true);
-            $_SESSION['username'] = $username;
-            $_SESSION['logged_in'] = true;
-            $configuration['{LOGIN_USERNAME}'] = htmlentities($username);
+    if($captchaOk)
+    {
+        if ($username === '' || $password === '') 
+        {
+            $configuration['{FEEDBACK}'] = '<mark>ERROR: Omple tots els camps</mark>';
+        }
+        else 
+        {
+            // Seleccionamos por nombre de usuario y recuperamos el hash
+            $sql = 'SELECT user_id, user_password FROM users WHERE user_name = :user_name LIMIT 1';
+            $query = $db->prepare($sql);
+            $query->bindValue(':user_name', $username);
+            $query->execute();
+            $row = $query->fetch(PDO::FETCH_ASSOC);
 
-            // Opcional: rehash si es necesario
-            if (password_needs_rehash($row['user_password'], PASSWORD_DEFAULT)) {
-                $newHash = password_hash($password, PASSWORD_DEFAULT);
-                $upd = $db->prepare('UPDATE users SET user_password = :p WHERE id = :id');
-                $upd->bindValue(':p', $newHash);
-                $upd->bindValue(':id', $row['id']);
-                $upd->execute();
+            if ($row && isset($row['user_password']) && password_verify($password, $row['user_password'])) 
+            {
+                // Login correcto
+                session_regenerate_id(true);
+                $_SESSION['username'] = $username;
+                $_SESSION['logged_in'] = true;
+                $configuration['{LOGIN_USERNAME}'] = htmlentities($username);
+
+                // Opcional: rehash si es necesario
+                if (password_needs_rehash($row['user_password'], PASSWORD_DEFAULT)) 
+                {
+                    $newHash = password_hash($password, PASSWORD_DEFAULT);
+                    $upd = $db->prepare('UPDATE users SET user_password = :p WHERE id = :id');
+                    $upd->bindValue(':p', $newHash);
+                    $upd->bindValue(':id', $row['id']);
+                    $upd->execute();
+                }
+
+                header('Location: /?page=home');
+                exit;
+            } 
+            else 
+            {
+                $configuration['{FEEDBACK}'] = '<mark>ERROR: Usuari desconegut o contrasenya incorrecta</mark>';
             }
-
-            header('Location: /?page=home');
-            exit;
-        } else {
-            $configuration['{FEEDBACK}'] = '<mark>ERROR: Usuari desconegut o contrasenya incorrecta</mark>';
         }
     }
+
+    
 }
 
 // =============================
